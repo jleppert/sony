@@ -1,0 +1,35 @@
+ var Client = require('node-ssdp').Client, client = new Client();
+
+client.on('response', function (headers, statusCode, rinfo) {
+  console.log('Got a response to an m-search.', headers, statusCode, rinfo);
+});
+client.search('urn:schemas-sony-com:service:ScalarWebAPI:1');
+setTimeout(function() {
+  console.log('done');
+}, 5000);
+
+/// {"version": "1.0", "params": ["1.0"], "method": "getMethodTypes", "id": 1}
+/*request({ url: 'http://192.168.1.128:10000/sony/camera', method: 'POST', body: JSON.stringify({
+  method: 'getMethodTypes',
+  params: ['1.0'],
+  id: 1,
+  version: '1.0'
+})}, function(err, res, body) {
+  var result = JSON.parse(body);
+  console.log(result);
+  fs.writeFileSync('./output.json', JSON.stringify(result));
+});*/
+
+/ {"version": "1.0", "params": ["1.0"], "method": "getMethodTypes", "id": 1}
+/*request({ url: 'http://192.168.1.128:10000/sony/camera', method: 'POST', body: JSON.stringify({
+  method: 'getMethodTypes',
+  params: ['1.0'],
+  id: 1,
+  version: '1.0'
+})}, function(err, res, body) {
+  var result = JSON.parse(body);
+  console.log(result);
+  fs.writeFileSync('./output.json', JSON.stringify(result));
+});*/
+
+
