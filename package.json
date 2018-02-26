@@ -10,9 +10,13 @@
   "license": "ISC",
   "dependencies": {
     "browserify-middleware": "^8.0.0",
+    "dnode": "^1.2.2",
     "express": "^4.16.2",
     "gphoto2": "git+https://github.com/lwille/node-gphoto2.git#feature/nan",
     "node-ssdp": "^3.2.5",
-    "request": "^2.83.0"
+    "request": "^2.83.0",
+    "sharp": "^0.19.1",
+    "shoe": "0.0.15",
+    "zerorpc": "^0.9.7"
   }
 }

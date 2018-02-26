@@ -2,6 +2,45 @@
   <head>
     <title>Camera Capture Utility</title>
   </head>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0px;
+      padding: 0px;
+      background: linear-gradient(to right, #0f0c29, #000000, #24243e);
+    }
+    canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+    }
+    #live {
+      z-index: 2;
+    }
+    #overlay {
+      z-index: 3;
+    }
+    #container {
+      margin: auto;
+      position: absolute;
+      top: 0; left: 0; bottom: 0; right: 0;
+      box-shadow: 0px 0px 500px 10px rgba(206, 227, 255, 0.6);
+    }
+
+    #preview-container div {
+      position: relative;
+    }
+
+    #preview img, canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+    }
+
+    #preview-container canvas {
+      z-index: 1;
+    }
+  </style>
   <body>
     <script src="/client.js"></script>
   </body>
