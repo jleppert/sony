@@ -8,6 +8,12 @@
       margin: 0px;
       padding: 0px;
       background: linear-gradient(to right, #0f0c29, #000000, #24243e);
+      box-shadow: inset 0px 0px 50px 10px #607D8B;
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
     }
     canvas {
       position: absolute;
@@ -20,21 +26,65 @@
     #overlay {
       z-index: 3;
     }
+
+    #overlay.valid {
+      outline: 2px solid lightgreen;
+    }
+
+    #overlay.invalid {
+      outline: 2px solid orangered;
+    }
+
+    #persist {
+      z-index: 10;
+      opacity: 0.7;
+    }
+
     #container {
       margin: auto;
       position: absolute;
       top: 0; left: 0; bottom: 0; right: 0;
       box-shadow: 0px 0px 500px 10px rgba(206, 227, 255, 0.6);
+      transition: all linear 500ms;
+    }
+
+    #container.reduced {
+      transform: scale(0.2);
+      transform-origin: bottom left;
+      top: initial;
+      margin: initial;
+      left: 50px;
+      bottom: 50px;
+      box-shadow: 0px 0px 50px 20px rgba(50, 50, 50, 0.6);
+    }
+
+    #preview-container {
+      padding: 30px;
+      height: 100%;
+      width: 100%;
+      overflow-y: scroll;
     }
 
     #preview-container div {
       position: relative;
+      margin: 10px;
+      transition: box-shadow linear 200ms;
+      box-shadow: 0px 0px 10px 10px rgba(255, 255, 255, 0.2);
+      outline: 2px solid black;
+      float: left;
+      cursor: pointer;
     }
 
-    #preview img, canvas {
-      position: absolute;
-      top: 0;
-      left: 0;
+    #preview-container div:hover {
+      box-shadow: 0px 0px 10px 10px rgba(255, 255, 255, 0.5);
+    }
+
+    #preview-container canvas.valid {
+      outline: 1px solid lightgreen;
+    }
+
+    #preview-container canvas.invalid {
+      outline: 1px solid orangered;
     }
 
     #preview-container canvas {

@@ -21,6 +21,7 @@ function decoder(frameCb) {
         }
       }
       if(startIndex !== -1 && liveViewPayloadIndex !== -1) {
+        if(buffer.length < startIndex + 8) return;
         seq = buffer.readUIntBE(startIndex + 2, 2);
         timestamp = buffer.readUIntBE(startIndex + 4, 4);
 

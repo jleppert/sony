@@ -9,6 +9,9 @@ var request     = require('request'),
     shoe        = require('shoe'),
     sharp       = require('sharp'),
     http        = require('http'),
+    mkdirp      = require('mkdirp'),
+    sanitize    = require('sanitize-filename'),
+    glob        = require('glob'),
     consts      = require('./consts');
 
 var remote,
@@ -21,6 +24,17 @@ var remote,
     recTimeout = null,
     chessboardResultsBySeq = {};
 
+var sessionsByTimestamp = {}, currentSessionTimestamp;
+var files = glob.sync('**/index.json', { cwd: path.join(__dirname, 'data') });
+files.forEach(function(file) {
+  var session = JSON.parse(fs.readFileSync(path.join(__dirname, 'data', file)));
+  sessionsByTimestamp[session.timestamp] = session;
+});
+
+function currentSessionDataPath() {
+  if(currentSessionTimestamp) return path.join(__dirname, 'data', currentSessionTimestamp);
+}
+
 var rpcServer = new zerorpc.Server({
   getFrame: function(cb) {
     var url = fullSizeFrameQueue.shift();
@@ -32,43 +46,67 @@ var rpcServer = new zerorpc.Server({
     delete framesBySeq[seq];
   },
   setChessboardResults: function(frameType, seq, results, cb) {
-    if(frameType === consts.FULLSIZE) console.log('got result here', frameType, seq, JSON.parse(results.toString()));
     cb(null);
     results = JSON.parse(results.toString());
     if(remote) remote.updateChessboard(frameType, seq, results);
     if(results.length === (consts.chessBoard[0] * consts.chessBoard[1])) {
-      console.log('taking photo!!!');
-      return
-      if(recTimeout) return;
-      recTimeout = setTimeout(function() {
-        request({ url: url + '/sony/camera', method: 'POST', body: JSON.stringify({
-          method: 'setShootMode',
-          params: ['still'],
-          id: 1,
-          version: '1.0',
-        })}, function(err, res, body) {
-          request({ url: url + '/sony/camera', method: 'POST', body: JSON.stringify({
-            method: 'actTakePicture',
-            params: [],
-            id: 1,
-            version: '1.0',
-          })}, function(err, res, body) {
-            recTimeout = null;
-            var data = JSON.parse(body.toString()),
-                photoUrl = data.result[0][0];
-            
-            console.log('got photo!!', photoUrl);
-            request({ url: photoUrl, method: 'GET', encoding: null }, function(err, res, body) {
-              fullSizeFrameQueue.push(photoUrl);
-              fullSizeFramesByUrl[photoUrl] = body;
-            });
-            console.log(data.result[0][0]);
-            return;
+      if(frameType === consts.PREVIEW) {
+        var currentSession = sessionsByTimestamp[currentSessionTimestamp];
 
-            console.log('took photo', body);
-          });
+        if(currentSession && currentSession.captureEnabled) {
+          console.log('taking photo!!!');
+          if(recTimeout) return;
+          recTimeout = setTimeout(function() {
+            request({ url: url + '/sony/camera', method: 'POST', body: JSON.stringify({
+              method: 'setShootMode',
+              params: ['still'],
+              id: 1,
+              version: '1.0',
+            })}, function(err, res, body) {
+              request({ url: url + '/sony/camera', method: 'POST', body: JSON.stringify({
+                method: 'actTakePicture',
+                params: [],
+                id: 1,
+                version: '1.0',
+              })}, function(err, res, body) {
+                recTimeout = null;
+                var data = JSON.parse(body.toString()),
+                    photoUrl = data.result[0][0];
+                
+                console.log('got photo!!', photoUrl);
+                request({ url: photoUrl, method: 'GET', encoding: null }, function(err, res, body) {
+                  fullSizeFrameQueue.push(photoUrl);
+                  fullSizeFramesByUrl[photoUrl] = body;
+                });
+                console.log(data.result[0][0]);
+                return;
+
+                console.log('took photo', body);
+              });
+            });
+          }, 1000);
+        }
+      } else {
+        var photo = {
+          id: sanitize(new Buffer(Math.random().toString()).toString('base64')),
+          points: results
+        };
+        fs.writeFile(path.join(sessionDataPath, `${photo.id}.jpg`), new Buffer(fullSizeFramesByUrl[seq]), { encoding: null }, function(err) {
+          if(!err) {
+            console.log('Wrote file', photo.id);
+            sessionsByTimestamp[currentSessionTimestamp].photos.push(photo);
+            fs.writeFile(path.join(currentSessionDataPath(), 'index.json'), JSON.stringify(sessionsByTimestamp[currentSessionTimestamp]), function(err) {
+              if(!err) console.log('wrote index file ok');
+              if(err) console.log('error writing index file', err);
+            });
+          }
+          if(err) console.log('Error writing file', photo.id, err);
         });
-      }, 1000);
+      
+      
+      session.photos.forEach(function(photo) {
+        
+      });}
     }
     //chessboardResultsBySeq[seq] = results;
     //cb(null);
@@ -110,7 +148,7 @@ app.use('/api/liveview', function(req, res) {
     
     var queue = [], queueDepth = 10; 
     var decode = decoder(function(seq, timestamp, jpegBuffer) {
-      console.log('got frame!!!', seq, timestamp);
+      //console.log('got frame!!!', seq, timestamp);
         frameQueue.push(seq);
         framesBySeq[seq] = jpegBuffer;
         frameCount++;
@@ -147,8 +185,48 @@ app.use(express.static('static'));
 
 var server = http.createServer(app);
 var sock = shoe(function(stream) {
+  var d = dnode({
+    createNewSession: function(cb) {
+      var session = {
+        timestamp: new Date().getTime(),
+        photos: [],
+        captureEnabled: false
+      };
+      
+      mkdirp.sync(path.join(__dirname, 'data', session.timestamp.toString()));
+
+      sessionsByTimestamp[session.timestamp] = session;
+      currentSessionTimestamp = session.timestamp;
+      cb(null, sessionsByTimestamp, session);
+    },
+    toggleSessionCapture: function(cb) {
+      var session = sessionsByTimestamp[currentSessionTimestamp];
+
+      if(!session) return cb(null);
+      session.captureEnabled = !session.captureEnabled;
+      cb(null, sessionsByTimestamp, session);
+    },
+    getSessions: function(cb) {
+      cb(null, sessionsByTimestamp, currentSessionTimestamp);
+    },
+    setCurrentSession: function(timestamp, cb) {
+      var session = sessionsByTimestamp[currentSessionTimestamp];
+      if(session) session.captureEnabled = false;
+      
+      currentSessionTimestamp = timestamp;
+
+      cb(null, sessionsByTimestamp, timestamp);
+      fullSizeFrameQueue = [];
+      fullSizeFramesByUrl = {};
+      
+      session = sessionsByTimestamp[timestamp]; 
+      session.photos.forEach(function(photo) {
+        fullSizeFramesByUrl[photo.id] = fs.readFileSync(path.join(__dirname, 'data', session.timestamp.toString(), `${photo.id}.jpg`));
+        if(remote) remote.updateChessboard(consts.FULLSIZE, photo.id, photo.points);
+      });
+    }
+  });
   
-  var d = dnode();
   d.on('remote', function(r) {
     remote = r;
   });
