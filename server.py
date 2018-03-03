@@ -8,6 +8,7 @@ import zerorpc
 import json
 import traceback
 from pprint import pprint
+import sys
 
 rpc = zerorpc.Client()
 rpc.connect("tcp://127.0.0.1:4242")
@@ -30,11 +31,14 @@ class FisheyeCalibration(object):
   PREVIEW = [1024.0, 680.0]
   scale = [PREVIEW[0] / FULLSIZE[0], PREVIEW[1] / FULLSIZE[1]]
 
-  def calibrate(self, size, corners):
+  def calibrate(self, size, corners = []):
     K = np.zeros((3, 3))
     D = np.zeros((4, 1))
     rvecs = [np.zeros((1, 1, 3), dtype=np.float64) for i in range(len(corners))]
-    objPoints = [objp for i in range(len(corners)]
+    tvecs = [np.zeros((1, 1, 3), dtype=np.float64) for i in range(len(corners))]
+    
+    objPoints = [objp for i in range(len(corners))]
+    
     cv2.fisheye.calibrate(
       objPoints,
       corners,
@@ -53,7 +57,6 @@ class FisheyeCalibration(object):
       "tvecs": tvecs
     }
     
-  
   def findChessboard(self, frameType, jpegBuffer):
     img = cv2.imdecode(np.fromstring(jpegBuffer, dtype='uint8'), cv2.IMREAD_COLOR)
     if frameType == self.FRAME_TYPE_FULLSIZE:
@@ -64,7 +67,7 @@ class FisheyeCalibration(object):
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
         scaledCorners = np.multiply(smallCorners, np.array([1 / self.scale[0], 1 / self.scale[1]]), dtype=np.float32)
         cv2.cornerSubPix(gray, scaledCorners, (5,5), (-1,-1), subpix_criteria)
-        return scaledCorners
+        return [smallCorners, scaledCorners]
       return []
     else:
       gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
@@ -82,26 +85,61 @@ class NumpyEncoder(json.JSONEncoder):
       return obj.tolist()
     return json.JSONEncoder.default(self, obj)
 
-while True:
-  try:
-    frameType, seq, frameBuffer = rpc.getFrame()
-  except:
-    print "Unable to get frame from remote"
-    sleep(0.5)
-    continue
-  
-  print "got frame with seq", seq
-  if seq is not None:
+def processFrames():
+  print "Started processing frames..."
+
+  while True:
     try:
-      rpc.setChessboardResults(frameType, seq, json.dumps(calib.findChessboard(frameType, frameBuffer), cls=NumpyEncoder))
+      frameType, timestamp, seq, frameBuffer = rpc.getFrameRequest()
     except Exception as e:
-      print "Unable to set chessboard results"
+      print "Unable to get frame from remote"
       print(traceback.format_exc())
       sleep(0.5)
-  else:
-    print "no frames to process"
-    sleep(0.5)
+      continue
+    
+    print "got frame with timestamp and seq", timestamp, seq
+    if seq is not None:
+      try:
+        rpc.setChessboardResults(frameType, timestamp, seq, json.dumps(calib.findChessboard(frameType, frameBuffer), cls=NumpyEncoder))
+      except Exception as e:
+        print "Unable to set chessboard results"
+        print(traceback.format_exc())
+        sleep(0.5)
+    else:
+      print "no frames to process"
+      sleep(0.5)
 
+def processCalibrations():
+  print "Started processing calibrations..."
+
+  while True:
+    try:
+       ident, size, corners = rpc.getCalibrationRequest()
+    except Exception as e:
+      print "Unable to get calibration request from remote"
+      print(traceback.format_exc())
+      sleep(0.5)
+      continue
+
+    print "got calibration request with id", ident
+    if ident is not None:
+      try:
+        corners = np.array(corners, dtype=np.float32)
+        size = (size[0], size[1])
+        print corners
+
+        rpc.setCalibrationResults(ident, json.dumps(calib.calibrate(size, corners), cls=NumpyEncoder))
+      except Exception as e:
+        print "unable to set calibration results"
+        print(traceback.format_exc())
+        sleep(0.5)
+    else:
+      print "no calibrations to process"
+      sleep(0.5)
+
+task = sys.argv[1]
+if(task == "frames"): processFrames()
+if(task == "calibrations"): processCalibrations()
 #s = zerorpc.Server(FisheyeCalibration())
 #s.bind("tcp://0.0.0.0:4242")
 #print "started server on port 4242..."
