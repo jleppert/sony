@@ -112,8 +112,10 @@ createNewSession.addEventListener('click', function() {
 
 toggleCapture.addEventListener('click', function() {
   if(remote && currentSessionTimestamp) {
-    remote.toggleSessionCapture(function(session) {
-      toggleCapture.innerText = session.captureEnabled ? 'Stop Capture' : 'Continue Capture';
+    remote.toggleSessionCapture(function(err, session) {
+      if(session) {
+        toggleCapture.innerText = session.captureEnabled ? 'Stop Capture' : 'Continue Capture';
+      }
     });
   }
 });
@@ -152,7 +154,7 @@ var stream = shoe('/ws');
 var d = dnode({
   updateChessboard: function(frameType, timestamp, seq, corners) {
     if(frameType === consts.PREVIEW) {
-      drawCorners(overlay, overlayCtx, corners[0], overlay.width, overlay.height);
+      drawCorners(overlay, overlayCtx, corners, overlay.width, overlay.height);
     } else {
       if(currentSessionTimestamp !== timestamp) return;
       var preview = document.createElement('img'), 

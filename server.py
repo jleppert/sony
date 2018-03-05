@@ -30,7 +30,18 @@ class FisheyeCalibration(object):
   FULLSIZE = [6000.0, 4000.0]
   PREVIEW = [1024.0, 680.0]
   scale = [PREVIEW[0] / FULLSIZE[0], PREVIEW[1] / FULLSIZE[1]]
+  
+  def initUndistortMap(self, K, D, size):
+    mapX, mapY = cv2.fisheye.initUndistortRectifyMap(K, D, np.eye(3), K, size, cv2.CV_16SC2);
+  
+    return {
+      x: mapX,
+      y: mapY
+    }
 
+  def unDistort(self, image, mapX, mapY):
+    return cv2.imdecode(np.fromstring(jpegBuffer, dtype='uint8'), cv2.IMREAD_COLOR)
+    
   def calibrate(self, size, corners = []):
     K = np.zeros((3, 3))
     D = np.zeros((4, 1))
@@ -49,12 +60,12 @@ class FisheyeCalibration(object):
       calibration_flags,
       (cv2.TERM_CRITERIA_EPS+cv2.TERM_CRITERIA_MAX_ITER, 30, 1e-6)
     )
-    
+
     return {
       "K": K,
       "D": D,
       "rvcecs": rvecs,
-      "tvecs": tvecs
+      "tvecs": tvecs,
     }
     
   def findChessboard(self, frameType, jpegBuffer):
@@ -137,9 +148,41 @@ def processCalibrations():
       print "no calibrations to process"
       sleep(0.5)
 
+def processCalibrationMaps():
+  print "Started processing calibration maps..."
+
+  while True:
+    try:
+      ident, K, D, size = rpc.getCalibrationMapRequest()
+    except Exception as e:
+      print "Unable to get calibration map request from remote"
+      print(traceback.format_exc())
+      sleep(0.5)
+      continue
+
+    print "got calibration map request with id", ident
+    if ident is not None:
+      try:
+        K = np.array(K)
+        D = np.array(D)
+        size = (size[0], size[1])
+
+        rpc.setCalibrationMapResult(ident, json.dumps(calib.initUndistortMap(K, D, size), cls=NumpyEncoder))
+      except Exception as e:
+        print "unable to set calibration results"
+        print(traceback.format_exc())
+        sleep(0.5)
+    else:
+      print "no calibrations to process"
+      sleep(0.5)
+
+
+
+
 task = sys.argv[1]
 if(task == "frames"): processFrames()
 if(task == "calibrations"): processCalibrations()
+if(task == "maps"): processCalibrationMaps()
 #s = zerorpc.Server(FisheyeCalibration())
 #s.bind("tcp://0.0.0.0:4242")
 #print "started server on port 4242..."

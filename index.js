@@ -77,7 +77,6 @@ var rpcServer = new zerorpc.Server({
   },
   setChessboardResults: function(frameType, timestamp, seq, results, cb) {
     cb(null);
-    console.log('set results', frameType, timestamp, seq, results);
     results = JSON.parse(results.toString());
     if(remote) remote.updateChessboard(frameType, timestamp, seq, results);
     if(frameType === consts.PREVIEW && results.length === (consts.chessBoard[0] * consts.chessBoard[1])) {
@@ -120,16 +119,21 @@ var rpcServer = new zerorpc.Server({
       var image = fullSizeFramesByUrl[seq];
       console.log('frametype fullsize', results); 
       sharp(image).metadata(function(err, meta) {
+        var _meta = meta;
+        delete _meta.exif;
         var photo = {
           id: sanitize(crypto.createHash('sha1').update(image).digest('hex')),
           points: results,
-          meta: meta
+          meta: _meta
         };
         fs.writeFile(path.join(__dirname, 'data', timestamp.toString(), `${photo.id}.jpg`), new Buffer(fullSizeFramesByUrl[seq]), { encoding: null }, function(err) {
           if(!err) {
             console.log('Wrote file', photo.id);
             sessionsByTimestamp[timestamp].photos.push(photo);
-          if(remote) remote.updateSession(timestamp, sessionsByTimestamp[timestamp]);
+            var util = require('util');
+
+            console.log('calling update session', timestamp, util.inspect(sessionsByTimestamp[timestamp], { showHidden: false, depth: null }));
+            if(remote) remote.updateSession(timestamp, sessionsByTimestamp[timestamp]);
             fs.writeFile(path.join(currentSessionDataPath(timestamp), 'index.json'), JSON.stringify(sessionsByTimestamp[timestamp]), function(err) {
               if(!err) console.log('wrote index file ok');
               if(err) console.log('error writing index file', err);
@@ -237,7 +241,7 @@ var sock = shoe(function(stream) {
 
       if(!session) return cb(null);
       session.captureEnabled = !session.captureEnabled;
-      cb(null, sessionsByTimestamp, session);
+      cb(null, session);
     },
     getSessions: function(cb) {
       cb(null, sessionsByTimestamp, currentSessionTimestamp);
@@ -266,6 +270,7 @@ var sock = shoe(function(stream) {
         id: session.calibrationCount,
         timestamp: timestamp,
         frameType: frameType,
+        maps: [],
         size: frameType === consts.FULLSIZE ? consts.imageSize : consts.previewSize,
         points: session.photos.map(function(photo) {
           return frameType === consts.PREVIEW ? photo.points[0] : photo.points[1]
